@@ -9,6 +9,17 @@ ZIP_URL = "https://github.com/MetaCubeX/meta-rules-dat/archive/refs/heads/meta.z
 def is_valid_domain(domain):
     if not domain or len(domain) > 253:
         return False
+    
+    invalid_suffixes = (
+        ".arpa", ".local", ".lan", ".home.arpa", ".root", 
+        ".invalid", ".test", ".example", ".onion", ".localhost"
+    )
+    if domain.endswith(invalid_suffixes):
+        return False
+    
+    if re.match(r"^\d{1,3}(\.\d{1,3}){3}$", domain):
+        return False
+
     if not re.match(r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$", domain):
         return False
     return True
@@ -41,12 +52,11 @@ def build():
         "cloudflare", "quad9", "opendns"
     ]
 
-    DNS_FILE_BLACKLIST = ["dns", "doh", "category-dns", "category-pki"]
+    DNS_FILE_BLACKLIST = ["dns", "doh", "category-dns", "category-pki", "private"]
 
     for member in z.namelist():
         if "geo/geosite/" in member and member.endswith(".list"):
             filename = os.path.basename(member).lower()
-            
             if any(dk in filename for dk in DNS_FILE_BLACKLIST):
                 continue
             
