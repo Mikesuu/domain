@@ -6,6 +6,13 @@ import os
 
 ZIP_URL = "https://github.com/MetaCubeX/meta-rules-dat/archive/refs/heads/meta.zip"
 
+def is_valid_domain(domain):
+    if not domain or len(domain) > 253:
+        return False
+    if not re.match(r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$", domain):
+        return False
+    return True
+
 def clean_domain(line):
     line = line.strip()
     if not line or line.startswith('#'):
@@ -13,9 +20,10 @@ def clean_domain(line):
     line = re.sub(r'^(domain|full|keyword|regexp):', '', line)
     line = re.sub(r'^(\+\.|\.)', '', line)
     line = line.split(' ')[0].split('\t')[0]
-    if not line or re.search(r'[\\*?|]', line) or '.' not in line:
-        return None
-    return line.lower()
+    domain = line.lower()
+    if is_valid_domain(domain):
+        return domain
+    return None
 
 def build():
     r = requests.get(ZIP_URL)
@@ -38,14 +46,17 @@ def build():
             is_oversea = any(kw in filename.lower() for kw in OVERSEA_KEYWORDS)
             
             with z.open(member) as f:
-                content = f.read().decode('utf-8')
-                for line in content.splitlines():
-                    domain = clean_domain(line)
-                    if domain:
-                        if is_oversea:
-                            oversea_set.add(domain)
-                        else:
-                            domestic_set.add(domain)
+                try:
+                    content = f.read().decode('utf-8')
+                    for line in content.splitlines():
+                        domain = clean_domain(line)
+                        if domain:
+                            if is_oversea:
+                                oversea_set.add(domain)
+                            else:
+                                domestic_set.add(domain)
+                except:
+                    continue
 
     domestic_set = domestic_set - oversea_set
 
