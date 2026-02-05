@@ -37,15 +37,21 @@ def build():
     OVERSEA_KEYWORDS = [
         "!cn", "gfw", "greatfire", "google", "youtube", "netflix", 
         "telegram", "facebook", "twitter", "instagram", "proxy",
-        "category-ads-all", "global", "outside", "apple-cdn", "apple-itunes"
+        "category-ads-all", "global", "outside", "apple-cdn", "apple-itunes",
+        "cloudflare", "quad9", "opendns"
     ]
+
+    DNS_FILE_BLACKLIST = ["dns", "doh", "category-dns", "category-pki"]
 
     for member in z.namelist():
         if "geo/geosite/" in member and member.endswith(".list"):
-            filename = os.path.basename(member)
-            is_oversea = any(kw in filename.lower() for kw in OVERSEA_KEYWORDS)
+            filename = os.path.basename(member).lower()
             
-            if "apple" in filename.lower() and "cn" not in filename.lower():
+            if any(dk in filename for dk in DNS_FILE_BLACKLIST):
+                continue
+            
+            is_oversea = any(kw in filename for kw in OVERSEA_KEYWORDS)
+            if "apple" in filename and "cn" not in filename:
                 is_oversea = True
             
             with z.open(member) as f:
@@ -61,10 +67,16 @@ def build():
                 except:
                     continue
 
-    apple_fixes = [d for d in domestic_set if "apple.com" in d or "mzstatic.com" in d or "itunes.com" in d or "icloud.com" in d]
-    for d in apple_fixes:
-        domestic_set.remove(d)
-        oversea_set.add(d)
+    force_oversea_kw = ["google", "cloudflare", "quad9", "dns-query"]
+    to_move = []
+    for d in domestic_set:
+        if any(kw in d for kw in force_oversea_kw) or any(x in d for x in ["apple.com", "mzstatic.com", "icloud.com"]):
+            to_move.append(d)
+
+    for d in to_move:
+        if d in domestic_set:
+            domestic_set.remove(d)
+            oversea_set.add(d)
 
     domestic_set = domestic_set - oversea_set
 
