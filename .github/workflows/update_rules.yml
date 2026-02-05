@@ -1,7 +1,7 @@
-name: Sync MetaCubeX Rules
+name: Sync Rules
 on:
   schedule:
-    - cron: '0 3 * * *' # 每天北京时间 11:00 运行
+    - cron: '0 3 * * *'
   workflow_dispatch:
 
 jobs:
@@ -16,16 +16,16 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install Requests
+      - name: Install
         run: pip install requests
 
-      - name: Run Builder
+      - name: Run
         run: python build.py
 
-      - name: Commit and Push
+      - name: Push
         run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
           git add *.conf
-          git commit -m "Auto-update rules: $(date +'%Y-%m-%d')" || exit 0
+          git commit -m "update" || exit 0
           git push
