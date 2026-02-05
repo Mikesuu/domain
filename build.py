@@ -37,13 +37,16 @@ def build():
     OVERSEA_KEYWORDS = [
         "!cn", "gfw", "greatfire", "google", "youtube", "netflix", 
         "telegram", "facebook", "twitter", "instagram", "proxy",
-        "category-ads-all", "global", "outside"
+        "category-ads-all", "global", "outside", "apple-cdn", "apple-itunes"
     ]
 
     for member in z.namelist():
         if "geo/geosite/" in member and member.endswith(".list"):
             filename = os.path.basename(member)
             is_oversea = any(kw in filename.lower() for kw in OVERSEA_KEYWORDS)
+            
+            if "apple" in filename.lower() and "cn" not in filename.lower():
+                is_oversea = True
             
             with z.open(member) as f:
                 try:
@@ -57,6 +60,11 @@ def build():
                                 domestic_set.add(domain)
                 except:
                     continue
+
+    apple_fixes = [d for d in domestic_set if "apple.com" in d or "mzstatic.com" in d or "itunes.com" in d or "icloud.com" in d]
+    for d in apple_fixes:
+        domestic_set.remove(d)
+        oversea_set.add(d)
 
     domestic_set = domestic_set - oversea_set
 
