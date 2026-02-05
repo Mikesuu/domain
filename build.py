@@ -9,41 +9,51 @@ ZIP_URL = "https://github.com/MetaCubeX/meta-rules-dat/archive/refs/heads/meta.z
 def is_valid_domain(domain):
     if not domain or len(domain) > 253:
         return False
-    
-    invalid_suffixes = (
-        ".arpa", ".local", ".lan", ".home.arpa", ".root", 
-        ".invalid", ".test", ".example", ".onion", ".localhost"
-    )
-    if domain.endswith(invalid_suffixes):
-        return False
-    
-    if re.match(r"^\d{1,3}(\.\d{1,3}){3}$", domain):
-        return False
-
-    if not re.match(r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$", domain):
-        return False
+    invalid_suffixes = (".arpa", ".local", ".lan", ".home.arpa", ".root", ".invalid", ".test", ".example", ".onion", ".localhost")
+    if domain.endswith(invalid_suffixes): return False
+    if re.match(r"^\d{1,3}(\.\d{1,3}){3}$", domain): return False
+    if not re.match(r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$", domain): return False
     return True
 
 def clean_domain(line):
     line = line.strip()
-    if not line or line.startswith('#'):
-        return None
+    if not line or line.startswith('#'): return None
     line = re.sub(r'^(domain|full|keyword|regexp):', '', line)
     line = re.sub(r'^(\+\.|\.)', '', line)
     line = line.split(' ')[0].split('\t')[0]
     domain = line.lower()
-    if is_valid_domain(domain):
-        return domain
-    return None
+    return domain if is_valid_domain(domain) else None
 
 def build():
     r = requests.get(ZIP_URL)
-    if r.status_code != 200:
-        return
+    if r.status_code != 200: return
     
     z = zipfile.ZipFile(io.BytesIO(r.content))
     domestic_set = set()
     oversea_set = set()
+
+    FORCE_DOMESTIC_KEYWORDS = [
+        "ntp", "time", "pool.ntp",
+        "speedtest", "ookla",
+        "connectivitycheck", "msftconnecttest",
+        "ocsp", "pki", "crl",
+        "update", "delivery", "content", "asset",
+        "officecdn", "microsoft.com.cn",
+        "apple.com.cn", "icloud.com.cn",
+        "push.apple.com", "apns",
+        "location", "maps.apple.com", "ls.apple.com",
+        "captcha", "verification", "identity",
+        "download", "setup",
+        "amap", "baidustatic",
+        "epicgames", "ea.com", "origin", "battlenet", "ubisoft",
+        "steamstatic", "steamcontent" 
+    ]
+
+    FORCE_PROXY_KEYWORDS = [
+        "tiktok", "musical.ly", "byteoversea",
+        "wechat", "tencent-cloud.com", 
+        "alibabacloud", "antgroup.com"
+    ]
 
     OVERSEA_KEYWORDS = [
         "!cn", "gfw", "greatfire", "google", "youtube", "netflix", 
@@ -52,16 +62,21 @@ def build():
         "cloudflare", "quad9", "opendns"
     ]
 
+    STRICT_OVERSEA_SUBDOMAINS = ["news-events.apple.com", "tv.apple.com", "movie.apple.com"]
     DNS_FILE_BLACKLIST = ["dns", "doh", "category-dns", "category-pki", "private"]
 
     for member in z.namelist():
         if "geo/geosite/" in member and member.endswith(".list"):
             filename = os.path.basename(member).lower()
-            if any(dk in filename for dk in DNS_FILE_BLACKLIST):
-                continue
+            if any(dk in filename for dk in DNS_FILE_BLACKLIST): continue
             
             is_oversea = any(kw in filename for kw in OVERSEA_KEYWORDS)
-            if "apple" in filename and "cn" not in filename:
+            
+            if any(pk in filename for pk in FORCE_PROXY_KEYWORDS):
+                is_oversea = True
+            elif any(nk in filename for nk in FORCE_DOMESTIC_KEYWORDS):
+                is_oversea = False
+            elif "apple" in filename and "cn" not in filename:
                 is_oversea = True
             
             with z.open(member) as f:
@@ -69,17 +84,27 @@ def build():
                     content = f.read().decode('utf-8')
                     for line in content.splitlines():
                         domain = clean_domain(line)
-                        if domain:
-                            if is_oversea:
-                                oversea_set.add(domain)
-                            else:
-                                domestic_set.add(domain)
+                        if not domain: continue
+                        
+                        if any(pk in domain for pk in FORCE_PROXY_KEYWORDS):
+                            oversea_set.add(domain)
+                        elif any(nk in domain for nk in FORCE_DOMESTIC_KEYWORDS):
+                            domestic_set.add(domain)
+                        elif is_oversea:
+                            oversea_set.add(domain)
+                        else:
+                            domestic_set.add(domain)
                 except:
                     continue
 
     force_oversea_kw = ["google", "cloudflare", "quad9", "dns-query"]
     to_move = []
     for d in domestic_set:
+        if any(nk in d for nk in FORCE_DOMESTIC_KEYWORDS):
+            continue
+        if any(sk in d for sk in STRICT_OVERSEA_SUBDOMAINS) or any(pk in d for pk in FORCE_PROXY_KEYWORDS):
+            to_move.append(d)
+            continue
         if any(kw in d for kw in force_oversea_kw) or any(x in d for x in ["apple.com", "mzstatic.com", "icloud.com"]):
             to_move.append(d)
 
