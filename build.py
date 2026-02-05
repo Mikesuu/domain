@@ -1,8 +1,10 @@
 import requests
 import re
+import zipfile
+import io
+import os
 
-RAW_URL_PREFIX = "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/"
-API_URL = "https://api.github.com/repos/MetaCubeX/meta-rules-dat/contents/geo/geosite?ref=meta"
+ZIP_URL = "https://github.com/MetaCubeX/meta-rules-dat/archive/refs/heads/meta.zip"
 
 def clean_domain(line):
     line = line.strip()
@@ -16,12 +18,11 @@ def clean_domain(line):
     return line.lower()
 
 def build():
-    session = requests.Session()
-    r = session.get(API_URL)
+    r = requests.get(ZIP_URL)
     if r.status_code != 200:
         return
     
-    files = [f['name'] for f in r.json() if f['name'].endswith('.list')]
+    z = zipfile.ZipFile(io.BytesIO(r.content))
     domestic_set = set()
     oversea_set = set()
 
@@ -31,24 +32,20 @@ def build():
         "category-ads-all", "global", "outside"
     ]
 
-    for name in files:
-        try:
-            resp = session.get(RAW_URL_PREFIX + name, timeout=10)
-            if resp.status_code != 200:
-                continue
+    for member in z.namelist():
+        if "geo/geosite/" in member and member.endswith(".list"):
+            filename = os.path.basename(member)
+            is_oversea = any(kw in filename.lower() for kw in OVERSEA_KEYWORDS)
             
-            is_oversea = any(kw in name.lower() for kw in OVERSEA_KEYWORDS)
-            
-            lines = resp.text.splitlines()
-            for line in lines:
-                domain = clean_domain(line)
-                if domain:
-                    if is_oversea:
-                        oversea_set.add(domain)
-                    else:
-                        domestic_set.add(domain)
-        except:
-            continue
+            with z.open(member) as f:
+                content = f.read().decode('utf-8')
+                for line in content.splitlines():
+                    domain = clean_domain(line)
+                    if domain:
+                        if is_oversea:
+                            oversea_set.add(domain)
+                        else:
+                            domestic_set.add(domain)
 
     domestic_set = domestic_set - oversea_set
 
