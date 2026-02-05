@@ -11,12 +11,13 @@ def clean_domain(line):
     line = re.sub(r'^(domain|full|keyword|regexp):', '', line)
     line = re.sub(r'^(\+\.|\.)', '', line)
     line = line.split(' ')[0].split('\t')[0]
-    if re.search(r'[\\*?|]', line):
+    if not line or re.search(r'[\\*?|]', line) or '.' not in line:
         return None
     return line.lower()
 
 def build():
-    r = requests.get(API_URL)
+    session = requests.Session()
+    r = session.get(API_URL)
     if r.status_code != 200:
         return
     
@@ -27,22 +28,27 @@ def build():
     OVERSEA_KEYWORDS = [
         "!cn", "gfw", "greatfire", "google", "youtube", "netflix", 
         "telegram", "facebook", "twitter", "instagram", "proxy",
-        "category-ads-all"
+        "category-ads-all", "global", "outside"
     ]
 
     for name in files:
-        resp = requests.get(RAW_URL_PREFIX + name)
-        if resp.status_code != 200: continue
-        
-        is_oversea = any(kw in name.lower() for kw in OVERSEA_KEYWORDS)
-        
-        for line in resp.text.splitlines():
-            domain = clean_domain(line)
-            if domain:
-                if is_oversea:
-                    oversea_set.add(domain)
-                else:
-                    domestic_set.add(domain)
+        try:
+            resp = session.get(RAW_URL_PREFIX + name, timeout=10)
+            if resp.status_code != 200:
+                continue
+            
+            is_oversea = any(kw in name.lower() for kw in OVERSEA_KEYWORDS)
+            
+            lines = resp.text.splitlines()
+            for line in lines:
+                domain = clean_domain(line)
+                if domain:
+                    if is_oversea:
+                        oversea_set.add(domain)
+                    else:
+                        domestic_set.add(domain)
+        except:
+            continue
 
     domestic_set = domestic_set - oversea_set
 
