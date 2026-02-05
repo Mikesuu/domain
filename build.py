@@ -7,8 +7,7 @@ import os
 ZIP_URL = "https://github.com/MetaCubeX/meta-rules-dat/archive/refs/heads/meta.zip"
 
 def is_valid_domain(domain):
-    if not domain or len(domain) > 253:
-        return False
+    if not domain or len(domain) > 253: return False
     invalid_suffixes = (".arpa", ".local", ".lan", ".home.arpa", ".root", ".invalid", ".test", ".example", ".onion", ".localhost")
     if domain.endswith(invalid_suffixes): return False
     if re.match(r"^\d{1,3}(\.\d{1,3}){3}$", domain): return False
@@ -27,30 +26,28 @@ def clean_domain(line):
 def build():
     r = requests.get(ZIP_URL)
     if r.status_code != 200: return
-    
     z = zipfile.ZipFile(io.BytesIO(r.content))
     domestic_set = set()
     oversea_set = set()
 
     FORCE_DOMESTIC_KEYWORDS = [
         "ntp", "time", "pool.ntp",
-        "speedtest", "ookla",
+        "speedtest", "ookla", "speed.cloudflare.com",
         "connectivitycheck", "msftconnecttest",
         "ocsp", "pki", "crl",
-        "update", "delivery", "content", "asset",
-        "officecdn", "microsoft.com.cn",
+        "windowsupdate", "msecnd.net", "aspnetcdn.com", "microsoft.com",
         "apple.com.cn", "icloud.com.cn",
         "push.apple.com", "apns",
         "location", "maps.apple.com", "ls.apple.com",
         "captcha", "verification", "identity",
-        "download", "setup",
         "amap", "baidustatic",
         "epicgames", "ea.com", "origin", "battlenet", "ubisoft",
-        "steamstatic", "steamcontent" 
+        "steamstatic", "steamcontent",
+        "weixin", "qlogo", "qpic", "servicewechat", "mmbiz", "wx.qq.com"
     ]
 
     FORCE_PROXY_KEYWORDS = [
-        "tiktok", "musical.ly", "byteoversea",
+        "tiktok", "musical.ly", "byteoversea", "tiktokv",
         "wechat", "tencent-cloud.com", 
         "alibabacloud", "antgroup.com"
     ]
@@ -71,13 +68,9 @@ def build():
             if any(dk in filename for dk in DNS_FILE_BLACKLIST): continue
             
             is_oversea = any(kw in filename for kw in OVERSEA_KEYWORDS)
-            
-            if any(pk in filename for pk in FORCE_PROXY_KEYWORDS):
-                is_oversea = True
-            elif any(nk in filename for nk in FORCE_DOMESTIC_KEYWORDS):
-                is_oversea = False
-            elif "apple" in filename and "cn" not in filename:
-                is_oversea = True
+            if any(pk in filename for pk in FORCE_PROXY_KEYWORDS): is_oversea = True
+            elif any(nk in filename for nk in FORCE_DOMESTIC_KEYWORDS): is_oversea = False
+            elif "apple" in filename and "cn" not in filename: is_oversea = True
             
             with z.open(member) as f:
                 try:
@@ -94,14 +87,12 @@ def build():
                             oversea_set.add(domain)
                         else:
                             domestic_set.add(domain)
-                except:
-                    continue
+                except: continue
 
     force_oversea_kw = ["google", "cloudflare", "quad9", "dns-query"]
     to_move = []
     for d in domestic_set:
-        if any(nk in d for nk in FORCE_DOMESTIC_KEYWORDS):
-            continue
+        if any(nk in d for nk in FORCE_DOMESTIC_KEYWORDS): continue
         if any(sk in d for sk in STRICT_OVERSEA_SUBDOMAINS) or any(pk in d for pk in FORCE_PROXY_KEYWORDS):
             to_move.append(d)
             continue
@@ -117,7 +108,6 @@ def build():
 
     with open("domestic_domain_list.conf", "w", encoding='utf-8') as f:
         f.write("\n".join(sorted(list(domestic_set))))
-        
     with open("oversea_domain_list.conf", "w", encoding='utf-8') as f:
         f.write("\n".join(sorted(list(oversea_set))))
 
